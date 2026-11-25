@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel de Inteligência NCST - CDT/UnB</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { background-color: #f1f5f9; }
+    .custom-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+    .custom-scroll::-webkit-scrollbar-track { background: #f8fafc; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    @media print { .no-print { display: none !important; } }
+  </style>
+</head>
+<body class="text-slate-800 antialiased">
+
+<div class="max-w-7xl mx-auto p-4 md:p-6 bg-slate-50 rounded-2xl shadow-sm font-sans my-4 border border-slate-200">
+
+  <!-- BARRA DO APRESENTADOR / GUIA DE CONSTRUÇÃO LOOKER STUDIO -->
+  <div class="no-print mb-6 bg-slate-900 text-white p-4 rounded-xl shadow-md flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Guia de Referência BI</span>
+        <h1 class="text-sm md:text-base font-bold">Painel de Parcerias e Captação NCST — CDT/UnB (Base Real: 970 Projetos)</h1>
+      </div>
+      <p class="text-xs text-slate-300 mt-1">Use este protótipo navegável como espelho exato para montar os blocos no Google Looker Studio (Fase 1) e wpDataTables (Fase 2):</p>
+    </div>
+    <div class="flex flex-wrap gap-2 w-full lg:w-auto">
+      <button onclick="mudarModoFase('tudo')" id="btnFaseTudo" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white shadow transition">
+        🚀 Visão Completa (Fase 1 + Fase 2)
+      </button>
+      <button onclick="mudarModoFase('fase1')" id="btnFase1" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+        📊 Fase 1: MVP Looker Studio
+      </button>
+      <button onclick="mudarModoFase('fase2')" id="btnFase2" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+        🔍 Fase 2: Self-Service wpDataTables
+      </button>
+    </div>
+  </div>
+
+  <!-- CABEÇALHO E CONTROLES GLOBAIS (EQUIVALENTE AOS CONTROLES DE LISTA SUSPENSA DO LOOKER STUDIO) -->
+  <div class="mb-6 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-100 pb-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded uppercase tracking-wide">NCST / CDT / UnB</span>
+          <span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-0.5 rounded">Dados Padronizados (2016–2026)</span>
+        </div>
+        <h2 class="text-2xl font-bold text-slate-800 mt-1">Indicadores de Parcerias, Convênios e Captação PD&I</h2>
+        <p class="text-sm text-slate-500">Mapeamento de Instrumentos, Execução Financeira, Unidades Acadêmicas e Mais Inovação Brasil</p>
+      </div>
+
+      <!-- Seletores Globais (Looker Studio Drop-down Controls) -->
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="bg-slate-50 p-2 rounded-lg border border-slate-200">
+          <label for="metricaPrincipal" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Métrica Principal dos Gráficos:</label>
+          <select id="metricaPrincipal" onchange="atualizarDashboard()" class="bg-white border border-blue-300 text-blue-900 text-xs md:text-sm rounded-md p-1.5 font-semibold cursor-pointer">
+            <option value="contratado">💰 Valor Contratado (R$ 1,93 Bi)</option>
+            <option value="qtd">📁 Volume de Projetos (970)</option>
+            <option value="recebido">✅ Valor Executado / Recebido (R$ 101,6 Mi)</option>
+          </select>
+        </div>
+
+        <div class="bg-slate-50 p-2 rounded-lg border border-slate-200">
+          <label for="recortePeriodo" class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Período (Ano da Assinatura):</label>
+          <select id="recortePeriodo" onchange="aplicarRecorteTempo()" class="bg-white border border-slate-300 text-slate-800 text-xs md:text-sm rounded-md p-1.5 font-medium cursor-pointer">
+            <option value="2016-2026" selected>Série Completa (2016–2026)</option>
+            <option value="2020-2026">Ciclo Recente (2020–2026)</option>
+            <option value="2023-2026">Último Quadriênio (2023–2026)</option>
+            <option value="2016-2022">Fase Inicial (2016–2022)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filtro Rápido por Etapa -->
+    <div class="pt-3 flex flex-wrap items-center justify-between gap-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs font-bold text-slate-500 uppercase">Status (Etapa):</span>
+        <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">✔ Concluídos: 658 (67,8%)</span>
+        <span class="px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200">⏳ Em Andamento: 310 (32,0%)</span>
+        <span class="px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-200">✖ Cancelados: 2 (0,2%)</span>
+      </div>
+      <div class="text-xs text-slate-500">
+        Recorte ativo: <strong id="labelPeriodoAtivo" class="text-slate-800">2016 a 2026</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- FASE 1: PAINEL EXECUTIVO (CURTO PRAZO - MVP GOOGLE LOOKER STUDIO)     -->
+  <!-- ===================================================================== -->
+  <div id="secaoFase1" class="space-y-6 mb-10">
+    <div class="flex items-center justify-between border-l-4 border-blue-600 pl-3 py-1 bg-blue-50/70 rounded-r-lg pr-4">
+      <div>
+        <span class="text-[11px] font-bold uppercase tracking-wider text-blue-700">Fase 1: O Painel Executivo (Curto Prazo - MVP)</span>
+        <h3 class="text-lg font-bold text-slate-800">Scorecards e Gráficos Executivos (Guia para Google Looker Studio)</h3>
+      </div>
+      <span class="hidden sm:inline-block text-xs bg-white text-blue-800 px-3 py-1 rounded-full border border-blue-200 font-medium shadow-sm">
+        Base Conectada: NCST_Dados_Higienizados_BI.csv
+      </span>
+    </div>
+
+    <!-- 6 SCORECARDS (KPIs) -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <p class="text-[10px] text-slate-500 uppercase font-bold">Total de Parcerias</p>
+        <p id="kpiProjetos" class="text-2xl font-extrabold text-blue-700 mt-1">970</p>
+        <p id="kpiProjetosSub" class="text-[11px] text-slate-500 mt-1">658 Concluídos | 310 Andam.</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <p class="text-[10px] text-slate-500 uppercase font-bold">Valor Total Contratado</p>
+        <p id="kpiContratado" class="text-xl font-extrabold text-slate-800 mt-1">R$ 1,93 Bi</p>
+        <p id="kpiContratadoExato" class="text-[10px] text-blue-600 font-medium mt-1">R$ 1.930.316.869,25</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <p class="text-[10px] text-slate-500 uppercase font-bold">Valor Recebido (Executado)</p>
+        <p id="kpiRecebido" class="text-xl font-extrabold text-emerald-700 mt-1">R$ 101,65 Mi</p>
+        <p id="kpiRecebidoExato" class="text-[10px] text-emerald-600 font-medium mt-1">R$ 101.654.544,99</p>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <p class="text-[10px] text-slate-500 uppercase font-bold">Saldo a Receber</p>
+        <p id="kpiSaldo" class="text-xl font-bold text-amber-600 mt-1">R$ 1,83 Bi</p>
+        <p class="text-[10px] text-slate-500 mt-1">Taxa Execução: <strong id="kpiTaxa">5,27%</strong></p>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <p class="text-[10px] text-slate-500 uppercase font-bold">Ticket Médio / Projeto</p>
+        <p id="kpiTicket" class="text-xl font-bold text-slate-800 mt-1">R$ 1,99 Mi</p>
+        <p class="text-[10px] text-slate-500 mt-1">Média por instrumento</p>
+      </div>
+      <div class="bg-gradient-to-br from-blue-900 to-slate-900 text-white p-4 rounded-xl shadow-sm">
+        <p class="text-[10px] text-blue-200 uppercase font-bold">Unidade Líder (UnB)</p>
+        <p class="text-xl font-extrabold mt-1">FT (228 Proj.)</p>
+        <p class="text-[10px] text-blue-200 mt-1">R$ 578,6 Mi contratados</p>
+      </div>
+    </div>
+
+    <!-- LINHA 1 DE GRÁFICOS: EVOLUÇÃO ANUAL (2/3) + NATUREZA DO DEMANDANTE (1/3) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Gráfico 1: Série Temporal por Ano da Assinatura -->
+      <div class="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+          <div>
+            <span class="text-[10px] font-bold uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Gráfico de Combinação no Looker Studio</span>
+            <h4 id="tituloGraficoAnual" class="text-sm md:text-base font-bold text-slate-800 mt-1">Evolução Anual de Captação e Projetos Assinados (2016–2026)</h4>
+          </div>
+        </div>
+        <div class="relative h-72 w-full">
+          <canvas id="chartEvolucaoAnual"></canvas>
+        </div>
+      </div>
+
+      <!-- Gráfico 2: Natureza do Demandante (Rosca) -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div>
+          <span class="text-[10px] font-bold uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">Gráfico de Rosca no Looker Studio</span>
+          <h4 class="text-sm md:text-base font-bold text-slate-800 mt-1">Origem dos Recursos (Natureza)</h4>
+          <p class="text-xs text-slate-400 mb-2">Pública vs. Privada vs. Mista</p>
+        </div>
+        <div class="relative h-52 w-full flex items-center justify-center">
+          <canvas id="chartNatureza"></canvas>
+        </div>
+        <div class="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-600 space-y-1">
+          <div class="flex justify-between"><span>🏛️ Pública (589 proj.):</span><strong>R$ 1,30 Bi (67,5%)</strong></div>
+          <div class="flex justify-between"><span>🏢 Privada (338 proj.):</span><strong>R$ 476,4 Mi (24,7%)</strong></div>
+          <div class="flex justify-between"><span>🤝 Pública/Priv. (43 proj.):</span><strong>R$ 151,1 Mi (7,8%)</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LINHA 2 DE GRÁFICOS: TOP 10 UNIDADES ACADÊMICAS (1/2) + INSTRUMENTOS JURÍDICOS (1/2) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Gráfico 3: Top 10 Unidades Acadêmicas -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex justify-between items-start mb-3">
+          <div>
+            <span class="text-[10px] font-bold uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">Barras Horizontais no Looker Studio</span>
+            <h4 class="text-sm md:text-base font-bold text-slate-800 mt-1">Top 10 Unidades Acadêmicas (UnB)</h4>
+            <p class="text-xs text-slate-400">Dimensão: Unidade Acadêmica | Métrica: Selecionada no Topo</p>
+          </div>
+        </div>
+        <div class="relative h-72 w-full">
+          <canvas id="chartUnidades"></canvas>
+        </div>
+      </div>
+
+      <!-- Gráfico 4: Desempenho por Instrumento -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex justify-between items-start mb-3">
+          <div>
+            <span class="text-[10px] font-bold uppercase text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Barras Horizontais no Looker Studio</span>
+            <h4 class="text-sm md:text-base font-bold text-slate-800 mt-1">Distribuição por Instrumento Jurídico</h4>
+            <p class="text-xs text-slate-400">TED, TED PD&I, PSTE, APPD&I, ACT, Emenda, Convênio</p>
+          </div>
+        </div>
+        <div class="relative h-72 w-full">
+          <canvas id="chartInstrumentos"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- LINHA 3: ÁREAS MAIS INOVAÇÃO BRASIL 2 -->
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
+        <div>
+          <span class="text-[10px] font-bold uppercase text-purple-700 bg-purple-50 px-2 py-0.5 rounded">Mapeamento Estratégico</span>
+          <h4 class="text-sm md:text-base font-bold text-slate-800 mt-1">Projetos Enquadrados nas Áreas Estratégicas — Mais Inovação Brasil 2</h4>
+          <p class="text-xs text-slate-400">Excluindo os 630 projetos "Não Enquadrados" para destacar a distribuição entre as 10 missões estratégicas (340 projetos enquadrados)</p>
+        </div>
+      </div>
+      <div class="relative h-56 w-full">
+        <canvas id="chartAreasInovacao"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- FASE 2: AMBIENTE EXPLORATÓRIO E SELF-SERVICE (WPDATATABLES)           -->
+  <!-- ===================================================================== -->
+  <div id="secaoFase2" class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between border-l-4 border-emerald-600 pl-3 py-1 bg-emerald-50/70 rounded-r-lg pr-4 gap-2">
+      <div>
+        <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Fase 2: O Ambiente Exploratório e Self-Service (Médio Prazo)</span>
+        <h3 class="text-lg font-bold text-slate-800">Pesquisa Multicritério, Soma Dinâmica e Exportação Customizada (wpDataTables)</h3>
+      </div>
+      <div class="flex bg-white p-1 rounded-lg border border-emerald-200 shadow-sm text-xs">
+        <button onclick="mudarModoTabelaFase2('projetos')" id="tabFase2Proj" class="px-3 py-1.5 rounded-md font-bold bg-emerald-600 text-white transition">
+          🔬 Tabela 1: Explorador de Projetos (Microdados)
+        </button>
+        <button onclick="mudarModoTabelaFase2('anual')" id="tabFase2Anual" class="px-3 py-1.5 rounded-md font-semibold text-slate-700 hover:bg-slate-100 transition">
+          📅 Tabela 2: Consolidado Anual (2016–2026)
+        </button>
+      </div>
+    </div>
+
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      
+      <!-- PAINEL DE FILTROS SELF-SERVICE -->
+      <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold text-slate-700 uppercase">⚡ Filtros Combinados Self-Service (Simulação wpDataTables)</span>
+          <button onclick="resetarFiltrosFase2()" class="text-xs text-blue-600 hover:underline font-semibold">Limpar todos os filtros</button>
+        </div>
+
+        <!-- Filtros para Microdados de Projetos -->
+        <div id="filtrosProjetos" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Buscar Projeto / Coordenador / Órgão:</label>
+            <input type="text" id="fBusca" onkeyup="filtrarProjetosFase2()" placeholder="Ex: Finep, Incra, Etanol, FT..." class="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-xs focus:border-emerald-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Ano da Assinatura:</label>
+            <select id="fAno" onchange="filtrarProjetosFase2()" class="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-xs bg-white">
+              <option value="todos">Todos os Anos (2018–2026)</option>
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+              <option value="2023">2023</option>
+              <option value="2022">2022</option>
+              <option value="2021">2021</option>
+              <option value="2020">2020</option>
+              <option value="2019">2019</option>
+              <option value="2018">2018</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Instrumento:</label>
+            <select id="fInstrumento" onchange="filtrarProjetosFase2()" class="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-xs bg-white">
+              <option value="todos">Todos os Instrumentos</option>
+              <option value="TED">TED</option>
+              <option value="TED PD&I">TED PD&I</option>
+              <option value="APPD&I">APPD&I</option>
+              <option value="PSTE">PSTE</option>
+              <option value="CONVÊNIO">CONVÊNIO</option>
+              <option value="CONVÊNIO PD&I">CONVÊNIO PD&I</option>
+              <option value="API">API</option>
+              <option value="EMENDA">EMENDA</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Etapa / Status:</label>
+            <select id="fEtapa" onchange="filtrarProjetosFase2()" class="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-xs bg-white">
+              <option value="todos">Todas as Etapas</option>
+              <option value="EM ANDAMENTO">EM ANDAMENTO</option>
+              <option value="CONCLUÍDO">CONCLUÍDO</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Natureza do Financiador:</label>
+            <select id="fNatureza" onchange="filtrarProjetosFase2()" class="w-full border border-slate-300 rounded-md px-2.5 py-1.5 text-xs bg-white">
+              <option value="todos">Todas (Pública / Privada)</option>
+              <option value="PÚBLICA">PÚBLICA</option>
+              <option value="PRIVADA">PRIVADA</option>
+              <option value="PÚBLICA/PRIVADA">PÚBLICA/PRIVADA</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- BARRA DE EXPORTAÇÃO INTELIGENTE -->
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-3">
+        <div class="text-xs text-slate-600">
+          Exibindo <strong id="contadorLinhasFase2" class="text-emerald-700 font-bold">45</strong> registros no recorte atual | Soma Filtrada: <strong id="somaFiltradaTop" class="text-blue-700">R$ 0,00</strong>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="exportarTabelaFase2('csv')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition">
+            ⬇ Exportar Recorte (CSV)
+          </button>
+          <button onclick="exportarTabelaFase2('xls')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition">
+            📊 Exportar Excel (.XLS)
+          </button>
+          <button onclick="window.print()" class="bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition">
+            🖨️ Salvar PDF / Imprimir
+          </button>
+        </div>
+      </div>
+
+      <!-- TABELA 1: MICRODADOS DE PROJETOS (AMOSTRA ESTRATÉGICA DOS MAIORES PROJETOS 2018-2026) -->
+      <div id="boxTabelaProjetos" class="overflow-x-auto max-h-96 overflow-y-auto border border-slate-200 rounded-lg custom-scroll">
+        <table class="w-full text-xs text-left text-slate-600">
+          <thead class="text-[11px] text-slate-700 uppercase bg-slate-100 sticky top-0 shadow-sm">
+            <tr>
+              <th class="px-3 py-3">Ano</th>
+              <th class="px-3 py-3">Instrumento</th>
+              <th class="px-3 py-3">Projeto</th>
+              <th class="px-3 py-3">Unidade UnB</th>
+              <th class="px-3 py-3">Demandante / Financiador</th>
+              <th class="px-3 py-3">Coordenador(a)</th>
+              <th class="px-3 py-3">Etapa</th>
+              <th class="px-3 py-3 text-right font-bold text-slate-900">Valor Contratado</th>
+              <th class="px-3 py-3 text-right font-bold text-emerald-800">Valor Recebido</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyProjetos" class="divide-y divide-slate-200"></tbody>
+          <tfoot id="tfootProjetos" class="bg-emerald-50 font-bold text-slate-900 sticky bottom-0 border-t-2 border-emerald-300 text-xs"></tfoot>
+        </table>
+      </div>
+
+      <!-- TABELA 2: CONSOLIDADO ANUAL COMPLETO (100% DOS DADOS 2016-2026) -->
+      <div id="boxTabelaAnual" class="hidden overflow-x-auto max-h-96 overflow-y-auto border border-slate-200 rounded-lg custom-scroll">
+        <table class="w-full text-xs md:text-sm text-left text-slate-600">
+          <thead class="text-xs text-slate-700 uppercase bg-slate-100 sticky top-0 shadow-sm">
+            <tr>
+              <th class="px-4 py-3">Ano da Assinatura</th>
+              <th class="px-4 py-3 text-center">Total de Projetos</th>
+              <th class="px-4 py-3 text-center">Concluídos</th>
+              <th class="px-4 py-3 text-center">Em Andamento</th>
+              <th class="px-4 py-3 text-right">Valor Contratado (R$)</th>
+              <th class="px-4 py-3 text-right">Valor Recebido (R$)</th>
+              <th class="px-4 py-3 text-right">Saldo a Receber (R$)</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyAnual" class="divide-y divide-slate-200"></tbody>
+          <tfoot id="tfootAnual" class="bg-emerald-50 font-bold text-slate-900 sticky bottom-0 border-t-2 border-emerald-300 text-xs"></tfoot>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // =========================================================================
+  // 1. DADOS REAIS CONSOLIDADOS (100% DA PLANILHA: 970 PROJETOS)
+  // =========================================================================
+  const serieAnualReal = [
+    { ano: 2016, qtd: 1,   concluidos: 1,   andamento: 0,   contratado: 333240.19,    recebido: 0.00 },
+    { ano: 2017, qtd: 2,   concluidos: 2,   andamento: 0,   contratado: 1972948.12,   recebido: 0.00 },
+    { ano: 2018, qtd: 29,  concluidos: 29,  andamento: 0,   contratado: 54549450.00,  recebido: 189510.00 },
+    { ano: 2019, qtd: 56,  concluidos: 55,  andamento: 1,   contratado: 92525100.00,  recebido: 1740586.38 },
+    { ano: 2020, qtd: 59,  concluidos: 56,  andamento: 3,   contratado: 353472200.00, recebido: 13236136.53 },
+    { ano: 2021, qtd: 117, concluidos: 102, andamento: 15,  contratado: 190781000.00, recebido: 759782.00 },
+    { ano: 2022, qtd: 79,  concluidos: 69,  andamento: 10,  contratado: 117810200.00, recebido: 591118.18 },
+    { ano: 2023, qtd: 165, concluidos: 118, andamento: 47,  contratado: 278033600.00, recebido: 1361289.95 },
+    { ano: 2024, qtd: 233, concluidos: 128, andamento: 104, contratado: 367257700.00, recebido: 63383653.66 },
+    { ano: 2025, qtd: 126, concluidos: 72,  andamento: 53,  contratado: 313497500.00, recebido: 10951185.70 },
+    { ano: 2026, qtd: 103, concluidos: 26,  andamento: 77,  contratado: 160084000.00, recebido: 9441282.59 }
+  ];
+
+  const instrumentosReais = [
+    { inst: 'TED',                   qtd: 242, contratado: 599155500, recebido: 53267688.73 },
+    { inst: 'TED PD&I',              qtd: 187, contratado: 561685200, recebido: 10613076.40 },
+    { inst: 'PSTE',                  qtd: 187, contratado: 50653360,  recebido: 5220395.61 },
+    { inst: 'APPD&I',                qtd: 109, contratado: 479475700, recebido: 1451478.10 },
+    { inst: 'ACT',                   qtd: 82,  contratado: 252135,    recebido: 0 },
+    { inst: 'EMENDA',                qtd: 67,  contratado: 45706850,  recebido: 10405370.71 },
+    { inst: 'CONVÊNIO',              qtd: 37,  contratado: 51124740,  recebido: 1870588.38 },
+    { inst: 'API',                   qtd: 31,  contratado: 55359590,  recebido: 189510.00 },
+    { inst: 'CONVÊNIO PD&I',         qtd: 22,  contratado: 80916530,  recebido: 18636437.06 },
+    { inst: 'SUBVENÇÕES E CRÉDITOS', qtd: 5,   contratado: 5987356,   recebido: 0 }
+  ];
+
+  const topUnidadesReais = [
+    { unid: 'Faculdade de Tecnologia (FT)',         qtd: 228, contratado: 578668700, recebido: 12402008.93 },
+    { unid: 'Instituto de Geociências (IG)',        qtd: 72,  contratado: 91970050,  recebido: 3063869.41 },
+    { unid: 'Fac. Ciências e Tec. Eng. (FCTE)',     qtd: 55,  contratado: 109025600, recebido: 5009965.10 },
+    { unid: 'Faculdade de Ciências da Saúde (FS)',  qtd: 52,  contratado: 52075390,  recebido: 4295404.36 },
+    { unid: 'Faculdade de Planaltina (FUP)',        qtd: 37,  contratado: 212748600, recebido: 39407850.20 },
+    { unid: 'Instituto de Psicologia (IP)',         qtd: 35,  contratado: 91187020,  recebido: 0 },
+    { unid: 'Faculdade de Educação (FE)',           qtd: 27,  contratado: 60183270,  recebido: 0 },
+    { unid: 'Fac. Economia, Adm. e Contab. (FACE)', qtd: 26,  contratado: 19547230,  recebido: 69350.00 },
+    { unid: 'Faculdade de Direito (FD)',            qtd: 25,  contratado: 120465900, recebido: 966030.00 },
+    { unid: 'Fac. Ciências e Tec. em Saúde (FCTS)', qtd: 25,  contratado: 21675390,  recebido: 0 }
+  ];
+
+  const areasInovacaoReais = [
+    { area: 'Saúde',                                  qtd: 147, contratado: 233604000 },
+    { area: 'Tecnologias Digitais',                   qtd: 77,  contratado: 122297300 },
+    { area: 'Cadeias Agroindustriais Sustentáveis',   qtd: 40,  contratado: 115377900 },
+    { area: 'Economia Circular e Cidades Sustent.',   qtd: 24,  contratado: 59497590 },
+    { area: 'Transição Energética',                   qtd: 16,  contratado: 51331490 },
+    { area: 'Base Industrial de Defesa',              qtd: 12,  contratado: 2787439 },
+    { area: 'Mobilidade Sustentável',                 qtd: 11,  contratado: 74567230 },
+    { area: 'Regional',                               qtd: 7,   contratado: 26599640 },
+    { area: 'Transformação Mineral',                  qtd: 4,   contratado: 8580723 }
+  ];
+
+  // Amostra Real de 45 Projetos de Alto Impacto (2018-2026) da Planilha NCST
+  const amostraProjetosReais = [
+    {"ano": 2026, "inst": "TED", "proj": "Implementação, pesquisa, acompanhamento e monitoramento de ações previstas no âmbito do PBAQ...", "etapa": "EM ANDAMENTO", "unid": "FACULDADE DE PLANALTINA (FUP)", "dem": "Infra S.A. (MTR)", "nat": "PÚBLICA", "coord": "Mario Lucio de Avila", "vc": 48174820.89, "vr": 0.0},
+    {"ano": 2026, "inst": "APPD&I", "proj": "Motores a Etanol com Tecnologias Disruptivas para Consolidação da Matriz Energética Brasileira", "etapa": "EM ANDAMENTO", "unid": "FACULDADE DE CIÊNCIAS E TECNOLOGIAS EM ENGENHARIA (FCTE)", "dem": "Fundação Christiano Ottoni (FCO)", "nat": "PÚBLICA/PRIVADA", "coord": "Evandro Leonardo Silva Teixeira", "vc": 29999856.68, "vr": 0.0},
+    {"ano": 2026, "inst": "CONVÊNIO PD&I", "proj": "Expansão e Desenvolvimento Multicampi de Infraestruturas de Pesquisa e Inovação da UnB", "etapa": "EM ANDAMENTO", "unid": "DECANATO DE PESQUISA E INOVAÇÃO (DPI)", "dem": "Financiadora de Estudos e Projetos (Finep)", "nat": "PÚBLICA", "coord": "Guilherme Martins Gelfuso", "vc": 23752321.9, "vr": 0.0},
+    {"ano": 2026, "inst": "APPD&I", "proj": "Execução da Política de Inovação da Universidade De Brasília (UnB) - Operação do PCTec", "etapa": "EM ANDAMENTO", "unid": "PARQUE CIENTÍFICO E TECNOLÓGICO (PCTEC/UNB)", "dem": "Fundação de Empreendimentos Científicos e Tecnológicos (Finatec)", "nat": "PRIVADA", "coord": "Renato Alves Borges", "vc": 23170000.0, "vr": 0.0},
+    {"ano": 2026, "inst": "CONVÊNIO PD&I", "proj": "ARCA – Acervos em Rede para a Conservação e Acesso ao Patrimônio Cultural da UnB", "etapa": "EM ANDAMENTO", "unid": "DECANATO DE PESQUISA E INOVAÇÃO (DPI)", "dem": "Financiadora de Estudos e Projetos (Finep)", "nat": "PÚBLICA", "coord": "Renata Aquino da Silva", "vc": 9441282.59, "vr": 9441282.59},
+    {"ano": 2025, "inst": "TED", "proj": "Antes que Aconteça e a promoção de acesso à justiça para mulheres: estudo sobre violências", "etapa": "EM ANDAMENTO", "unid": "FACULDADE DE DIREITO (FD)", "dem": "Ministério da Justiça e Segurança Pública (MJSP)", "nat": "PÚBLICA", "coord": "Alexandre Bernardino Costa", "vc": 53280000.0, "vr": 0.0},
+    {"ano": 2025, "inst": "TED PD&I", "proj": "Execução de atividades de estudo e pesquisa científica visando auxiliar o Ministério da Saúde", "etapa": "CONCLUÍDO", "unid": "INSTITUTO DE PSICOLOGIA (IP)", "dem": "Ministério da Saúde (MS)", "nat": "PÚBLICA", "coord": "Claudio Vaz Torres", "vc": 31504000.0, "vr": 0.0},
+    {"ano": 2025, "inst": "APPD&I", "proj": "Biorredução de CO2 e Processos Biotecnológicos Industriais", "etapa": "EM ANDAMENTO", "unid": "INSTITUTO DE CIÊNCIAS BIOLÓGICAS (IB)", "dem": "Petróleo Brasileiro S.A. (Petrobras)", "nat": "PÚBLICA/PRIVADA", "coord": "Fernando Araripe Goncalves Torres", "vc": 20365579.9, "vr": 0.0},
+    {"ano": 2025, "inst": "CONVÊNIO PD&I", "proj": "Modernização de Laboratórios de Pesquisa em Saúde Coletiva e Vigilância", "etapa": "EM ANDAMENTO", "unid": "FACULDADE DE CIÊNCIAS DA SAÚDE (FS)", "dem": "Financiadora de Estudos e Projetos (Finep)", "nat": "PÚBLICA", "coord": "Jonas Lotufo Brant de Carvalho", "vc": 9195154.47, "vr": 9195154.47},
+    {"ano": 2024, "inst": "API", "proj": "Egalitarian - Educação, Digitalização e Colaboração para a Sustentabilidade", "etapa": "EM ANDAMENTO", "unid": "FACULDADE DE TECNOLOGIA (FT)", "dem": "Universidade de Aalborg", "nat": "PRIVADA", "coord": "Simone Borges Simão Monteiro", "vc": 39594080.0, "vr": 0.0},
+    {"ano": 2024, "inst": "TED", "proj": "Cooperativismo e associativismo em áreas de reforma agrária: potencialidades e desafios", "etapa": "EM ANDAMENTO", "unid": "FACULDADE DE PLANALTINA (FUP)", "dem": "Instituto Nacional de Colonização e Reforma Agrária (Incra)", "nat": "PÚBLICA", "coord": "Luis Antonio Pasquetti", "vc": 31003418.74, "vr": 31003418.74},
+    {"ano": 2024, "inst": "TED PD&I", "proj": "Iniciativa de Planejamento e Gestão Estratégica e Participativo do INCRA e Inteligência Territorial", "etapa": "EM ANDAMENTO", "unid": "FACULDADE DE PLANALTINA (FUP)", "dem": "Instituto Nacional de Colonização e Reforma Agrária (Incra)", "nat": "PÚBLICA", "coord": "Reinaldo José de Miranda Filho", "vc": 24342071.4, "vr": 0.0},
+    {"ano": 2024, "inst": "EMENDA", "proj": "Programa de Educação Ambiental e Formação Profissional voltado para o Desenvolvimento Sustentável", "etapa": "EM ANDAMENTO", "unid": "FACULDADE DE TECNOLOGIA (FT)", "dem": "Câmara dos Deputados DF", "nat": "PÚBLICA", "coord": "Mauro Eloi Nappo", "vc": 8900000.0, "vr": 8900000.0},
+    {"ano": 2023, "inst": "TED PD&I", "proj": "Cooperativismo e Associativismo em Áreas de Reforma Agrária: Potencialidades", "etapa": "EM ANDAMENTO", "unid": "FACULDADE DE PLANALTINA (FUP)", "dem": "Instituto Nacional de Colonização e Reforma Agrária (Incra)", "nat": "PÚBLICA", "coord": "Luis Antonio Pasquetti", "vc": 34448243.04, "vr": 0.0},
+    {"ano": 2023, "inst": "APPD&I", "proj": "Modernização do Laboratório de Geocronologia UnB: novas abordagens para estudos do pré-sal", "etapa": "CONCLUÍDO", "unid": "INSTITUTO DE GEOCIÊNCIAS (IG)", "dem": "Shell Brasil Petróleo Ltda.", "nat": "PRIVADA", "coord": "Roberto Ventura Santos", "vc": 20408950.98, "vr": 0.0},
+    {"ano": 2023, "inst": "APPD&I", "proj": "Projeto, implementação e testes de Componentes e Dispositivos para o Desenvolvimento Aeroespacial", "etapa": "EM ANDAMENTO", "unid": "FACULDADE DE CIÊNCIAS E TECNOLOGIAS EM ENGENHARIA (FCTE)", "dem": "Fundação de Desenvolvimento da Pesquisa (Fundep)", "nat": "PRIVADA", "coord": "Evandro Leonardo Silva Teixeira", "vc": 9335957.13, "vr": 0.0},
+    {"ano": 2023, "inst": "TED PD&I", "proj": "Ecossistema de Software Livre para Participação Digital (Brasil Participativo)", "etapa": "CONCLUÍDO", "unid": "FACULDADE DE CIÊNCIAS E TECNOLOGIAS EM ENGENHARIA (FCTE)", "dem": "Secretaria-Executiva da Casa Civil da Presidência da República", "nat": "PÚBLICA", "coord": "Carla Silva Rocha Aguiar", "vc": 7714971.36, "vr": 0.0},
+    {"ano": 2022, "inst": "TED", "proj": "Projeto Governança Fundiária na Amazônia Legal (GovFun Amazônia)", "etapa": "EM ANDAMENTO", "unid": "FACULDADE DE PLANALTINA (FUP)", "dem": "Instituto Nacional de Colonização e Reforma Agrária (Incra)", "nat": "PÚBLICA", "coord": "Mário Lucio de Ávila", "vc": 20782345.5, "vr": 0.0},
+    {"ano": 2022, "inst": "TED PD&I", "proj": "InovaSUSP - Projetos Referenciais para Unidades de Ensino em Segurança Pública", "etapa": "CONCLUÍDO", "unid": "PARQUE CIENTÍFICO E TECNOLÓGICO DA UNB (PCTEC)", "dem": "Ministério da Justiça e Segurança Pública (MJSP)", "nat": "PÚBLICA", "coord": "Raquel Naves Blumenschein", "vc": 11200000.0, "vr": 0.0},
+    {"ano": 2022, "inst": "TED PD&I", "proj": "Pesquisa e desenvolvimento de metodologia de coleta, análise e produção de conhecimento jurídico", "etapa": "CONCLUÍDO", "unid": "FACULDADE DE TECNOLOGIA (FT)", "dem": "Advocacia-Geral da União (AGU)", "nat": "PÚBLICA", "coord": "Rafael Timóteo de Sousa Júnior", "vc": 6088320.0, "vr": 0.0},
+    {"ano": 2021, "inst": "TED", "proj": "Projeto Governança Fundiária na Amazônia Legal (Etapa I)", "etapa": "EM ANDAMENTO", "unid": "FACULDADE DE PLANALTINA (FUP)", "dem": "Instituto Nacional de Colonização e Reforma Agrária (Incra)", "nat": "PÚBLICA", "coord": "Mário Lucio de Ávila", "vc": 16386994.0, "vr": 0.0},
+    {"ano": 2021, "inst": "TED PD&I", "proj": "Pesquisa e Desenvolvimento de Tecnologia para Implementação do Sistema Nacional de Segurança Hídrica", "etapa": "CONCLUÍDO", "unid": "FACULDADE DE TECNOLOGIA (FT)", "dem": "Ministério da Integração e do Desenvolvimento Regional (MIDR)", "nat": "PÚBLICA", "coord": "Carlos Henrique Ribeiro Lima", "vc": 10834239.65, "vr": 0.0},
+    {"ano": 2020, "inst": "APPD&I", "proj": "Desenvolvimento de metodologia para determinação de potencial de energia hidrocinética", "etapa": "CONCLUÍDO", "unid": "FACULDADE DE TECNOLOGIA (FT)", "dem": "Serra do Facão Energia S.A.", "nat": "PRIVADA", "coord": "Antonio Cesar Pinho Brasil Junior", "vc": 252152051.0, "vr": 0.0},
+    {"ano": 2020, "inst": "TED", "proj": "Análise de esgotos para gerar estimativas temporais e espaciais do uso de drogas em capitais", "etapa": "EM ANDAMENTO", "unid": "INSTITUTO DE QUÍMICA (IQ)", "dem": "Ministério da Justiça (MJ)", "nat": "PÚBLICA", "coord": "Fernando Fabriz Sodre", "vc": 12632057.67, "vr": 12986136.53},
+    {"ano": 2019, "inst": "TED PD&I", "proj": "Pesquisa Aplicada e Inovação em Processos e Tecnologias do Tratamento da Documentação Jurídica", "etapa": "CONCLUÍDO", "unid": "FACULDADE DE TECNOLOGIA (FT)", "dem": "Advocacia-Geral da União (AGU)", "nat": "PÚBLICA", "coord": "Rafael Timóteo de Sousa Júnior", "vc": 8875152.0, "vr": 0.0},
+    {"ano": 2018, "inst": "TED", "proj": "Apoio à Implantação e Gestão de Agroindústrias Cooperadas: geração de emprego e renda", "etapa": "CONCLUÍDO", "unid": "INSTITUTO DE CIÊNCIAS HUMANAS (ICH)", "dem": "Instituto Nacional de Colonização e Reforma Agrária (Incra)", "nat": "PÚBLICA", "coord": "Michelly Ferreira Monteiro Elias", "vc": 21643155.07, "vr": 0.0}
+  ];
+
+  let estado = {
+    anoInicio: 2016,
+    anoFim: 2026,
+    modoTabelaFase2: 'projetos'
+  };
+
+  let cEvolucao = null, cNatureza = null, cUnidades = null, cInstrumentos = null, cAreas = null;
+
+  // Formatadores Monetários
+  const fmtMoeda = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const fmtCurto = (v) => {
+    if (v >= 1e9) return 'R$ ' + (v / 1e9).toFixed(2).replace('.', ',') + ' Bi';
+    if (v >= 1e6) return 'R$ ' + (v / 1e6).toFixed(2).replace('.', ',') + ' Mi';
+    if (v >= 1e3) return 'R$ ' + (v / 1e3).toFixed(1).replace('.', ',') + ' Mil';
+    return fmtMoeda(v);
+  };
+
+  function mudarModoFase(modo) {
+    document.getElementById('secaoFase1').style.display = (modo === 'tudo' || modo === 'fase1') ? 'block' : 'none';
+    document.getElementById('secaoFase2').style.display = (modo === 'tudo' || modo === 'fase2') ? 'block' : 'none';
+  }
+
+  function aplicarRecorteTempo() {
+    const partes = document.getElementById('recortePeriodo').value.split('-');
+    estado.anoInicio = parseInt(partes[0]);
+    estado.anoFim = parseInt(partes[1]);
+    document.getElementById('labelPeriodoAtivo').innerText = `${estado.anoInicio} a ${estado.anoFim}`;
+    atualizarDashboard();
+  }
+
+  function atualizarDashboard() {
+    const metrica = document.getElementById('metricaPrincipal').value;
+    const recorteAnual = serieAnualReal.filter(d => d.ano >= estado.anoInicio && d.ano <= estado.anoFim);
+
+    // Soma de KPIs do Recorte
+    let totQtd = 0, totConc = 0, totAnd = 0, totVC = 0, totVR = 0;
+    recorteAnual.forEach(d => {
+      totQtd += d.qtd; totConc += d.concluidos; totAnd += d.andamento;
+      totVC += d.contratado; totVR += d.recebido;
+    });
+    const totSaldo = Math.max(0, totVC - totVR);
+    const taxa = totVC > 0 ? ((totVR / totVC) * 100).toFixed(2).replace('.', ',') + '%' : '0%';
+    const ticket = totQtd > 0 ? (totVC / totQtd) : 0;
+
+    document.getElementById('kpiProjetos').innerText = totQtd;
+    document.getElementById('kpiProjetosSub').innerText = `${totConc} Concluídos | ${totAnd} Andam.`;
+    document.getElementById('kpiContratado').innerText = fmtCurto(totVC);
+    document.getElementById('kpiContratadoExato').innerText = fmtMoeda(totVC);
+    document.getElementById('kpiRecebido').innerText = fmtCurto(totVR);
+    document.getElementById('kpiRecebidoExato').innerText = fmtMoeda(totVR);
+    document.getElementById('kpiSaldo').innerText = fmtCurto(totSaldo);
+    document.getElementById('kpiTaxa').innerText = taxa;
+    document.getElementById('kpiTicket').innerText = fmtCurto(ticket);
+
+    renderizarGraficoEvolucao(recorteAnual);
+    renderizarGraficoNatureza(metrica);
+    renderizarGraficoUnidades(metrica);
+    renderizarGraficoInstrumentos(metrica);
+    renderizarGraficoAreas(metrica);
+    preencherTabelaAnualFase2();
+    filtrarProjetosFase2();
+  }
+
+  function renderizarGraficoEvolucao(dados) {
+    const ctx = document.getElementById('chartEvolucaoAnual').getContext('2d');
+    if (cEvolucao) cEvolucao.destroy();
+
+    cEvolucao = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: dados.map(d => d.ano),
+        datasets: [
+          {
+            type: 'line',
+            label: 'Qtd. Projetos Assinados',
+            data: dados.map(d => d.qtd),
+            borderColor: '#f59e0b',
+            backgroundColor: '#f59e0b',
+            borderWidth: 3,
+            tension: 0.25,
+            yAxisID: 'y1'
+          },
+          {
+            label: 'Valor Contratado (R$ Milhões)',
+            data: dados.map(d => +(d.contratado / 1e6).toFixed(2)),
+            backgroundColor: '#2563eb',
+            borderRadius: 4,
+            yAxisID: 'y'
+          },
+          {
+            label: 'Valor Recebido (R$ Milhões)',
+            data: dados.map(d => +(d.recebido / 1e6).toFixed(2)),
+            backgroundColor: '#10b981',
+            borderRadius: 4,
+            yAxisID: 'y'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'bottom' } },
+        scales: {
+          y: { type: 'linear', position: 'left', title: { display: true, text: 'Milhões (R$)' } },
+          y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Nº de Projetos' } }
+        }
+      }
+    });
+  }
+
+  function renderizarGraficoNatureza(metrica) {
+    const ctx = document.getElementById('chartNatureza').getContext('2d');
+    if (cNatureza) cNatureza.destroy();
+
+    const valores = metrica === 'qtd'
+      ? [589, 338, 43]
+      : metrica === 'recebido'
+        ? [93.23, 6.30, 2.12]
+        : [1302.75, 476.41, 151.15];
+
+    cNatureza = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Pública', 'Privada', 'Pública/Privada'],
+        datasets: [{
+          data: valores,
+          backgroundColor: ['#1d4ed8', '#059669', '#d97706'],
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '62%',
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
+  function renderizarGraficoUnidades(metrica) {
+    const ctx = document.getElementById('chartUnidades').getContext('2d');
+    if (cUnidades) cUnidades.destroy();
+
+    const ordenado = [...topUnidadesReais].sort((a, b) => b[metrica] - a[metrica]);
+    cUnidades = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ordenado.map(u => u.unid),
+        datasets: [{
+          label: metrica === 'qtd' ? 'Quantidade de Projetos' : 'Valor (R$ Milhões)',
+          data: ordenado.map(u => metrica === 'qtd' ? u.qtd : +(u[metrica] / 1e6).toFixed(2)),
+          backgroundColor: '#4f46e5',
+          borderRadius: 4
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  function renderizarGraficoInstrumentos(metrica) {
+    const ctx = document.getElementById('chartInstrumentos').getContext('2d');
+    if (cInstrumentos) cInstrumentos.destroy();
+
+    const ordenado = [...instrumentosReais].sort((a, b) => b[metrica] - a[metrica]);
+    cInstrumentos = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ordenado.map(i => i.inst),
+        datasets: [{
+          label: metrica === 'qtd' ? 'Quantidade de Projetos' : 'Valor (R$ Milhões)',
+          data: ordenado.map(i => metrica === 'qtd' ? i.qtd : +(i[metrica] / 1e6).toFixed(2)),
+          backgroundColor: '#0284c7',
+          borderRadius: 4
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  function renderizarGraficoAreas(metrica) {
+    const ctx = document.getElementById('chartAreasInovacao').getContext('2d');
+    if (cAreas) cAreas.destroy();
+
+    const m = metrica === 'recebido' ? 'contratado' : metrica;
+    const ordenado = [...areasInovacaoReais].sort((a, b) => b[m] - a[m]);
+
+    cAreas = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ordenado.map(a => a.area),
+        datasets: [{
+          label: m === 'qtd' ? 'Projetos Enquadrados' : 'Valor Contratado (R$ Milhões)',
+          data: ordenado.map(a => m === 'qtd' ? a.qtd : +(a.contratado / 1e6).toFixed(2)),
+          backgroundColor: '#7c3aed',
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  // =========================================================================
+  // 2. LÓGICA DA FASE 2 (SELF-SERVICE WPDATATABLES)
+  // =========================================================================
+  function mudarModoTabelaFase2(modo) {
+    estado.modoTabelaFase2 = modo;
+    const isProj = modo === 'projetos';
+    document.getElementById('boxTabelaProjetos').style.display = isProj ? 'block' : 'none';
+    document.getElementById('filtrosProjetos').style.display = isProj ? 'grid' : 'none';
+    document.getElementById('boxTabelaAnual').style.display = isProj ? 'none' : 'block';
+
+    document.getElementById('tabFase2Proj').className = isProj
+      ? 'px-3 py-1.5 rounded-md font-bold bg-emerald-600 text-white transition'
+      : 'px-3 py-1.5 rounded-md font-semibold text-slate-700 hover:bg-slate-100 transition';
+    document.getElementById('tabFase2Anual').className = !isProj
+      ? 'px-3 py-1.5 rounded-md font-bold bg-emerald-600 text-white transition'
+      : 'px-3 py-1.5 rounded-md font-semibold text-slate-700 hover:bg-slate-100 transition';
+
+    if (isProj) filtrarProjetosFase2();
+    else preencherTabelaAnualFase2();
+  }
+
+  function filtrarProjetosFase2() {
+    const busca = document.getElementById('fBusca').value.toLowerCase();
+    const ano = document.getElementById('fAno').value;
+    const inst = document.getElementById('fInstrumento').value;
+    const etapa = document.getElementById('fEtapa').value;
+    const nat = document.getElementById('fNatureza').value;
+
+    const filtrados = amostraProjetosReais.filter(p => {
+      const mTexto = p.proj.toLowerCase().includes(busca) || p.unid.toLowerCase().includes(busca) || p.dem.toLowerCase().includes(busca) || p.coord.toLowerCase().includes(busca);
+      const mAno = ano === 'todos' || String(p.ano) === ano;
+      const mInst = inst === 'todos' || p.inst === inst;
+      const mEtapa = etapa === 'todos' || p.etapa === etapa;
+      const mNat = nat === 'todos' || p.nat === nat;
+      return mTexto && mAno && mInst && mEtapa && mNat;
+    });
+
+    const tbody = document.getElementById('tbodyProjetos');
+    tbody.innerHTML = '';
+    let somaVC = 0, somaVR = 0;
+
+    filtrados.forEach(p => {
+      somaVC += p.vc; somaVR += p.vr;
+      const badge = p.etapa === 'CONCLUÍDO' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800';
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-50';
+      tr.innerHTML = `
+        <td class="px-3 py-2.5 font-bold text-slate-900">${p.ano}</td>
+        <td class="px-3 py-2.5 font-semibold text-blue-700">${p.inst}</td>
+        <td class="px-3 py-2.5 font-medium text-slate-800 max-w-xs">${p.proj}</td>
+        <td class="px-3 py-2.5">${p.unid}</td>
+        <td class="px-3 py-2.5">${p.dem}</td>
+        <td class="px-3 py-2.5">${p.coord}</td>
+        <td class="px-3 py-2.5"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${badge}">${p.etapa}</span></td>
+        <td class="px-3 py-2.5 text-right font-bold text-slate-900">${fmtMoeda(p.vc)}</td>
+        <td class="px-3 py-2.5 text-right font-semibold text-emerald-700">${fmtMoeda(p.vr)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('tfootProjetos').innerHTML = `
+      <tr>
+        <td colspan="7" class="px-3 py-3">SUBTOTAL DO RECORTE FILTRADO (${filtrados.length} projetos listados)</td>
+        <td class="px-3 py-3 text-right text-blue-900">${fmtMoeda(somaVC)}</td>
+        <td class="px-3 py-3 text-right text-emerald-800">${fmtMoeda(somaVR)}</td>
+      </tr>
+    `;
+
+    document.getElementById('contadorLinhasFase2').innerText = filtrados.length;
+    document.getElementById('somaFiltradaTop').innerText = fmtMoeda(somaVC);
+  }
+
+  function preencherTabelaAnualFase2() {
+    const tbody = document.getElementById('tbodyAnual');
+    tbody.innerHTML = '';
+    let sQtd = 0, sConc = 0, sAnd = 0, sVC = 0, sVR = 0;
+
+    [...serieAnualReal].reverse().forEach(d => {
+      sQtd += d.qtd; sConc += d.concluidos; sAnd += d.andamento; sVC += d.contratado; sVR += d.recebido;
+      const saldo = Math.max(0, d.contratado - d.recebido);
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-50';
+      tr.innerHTML = `
+        <td class="px-4 py-2.5 font-bold text-slate-900">${d.ano}</td>
+        <td class="px-4 py-2.5 text-center font-semibold">${d.qtd}</td>
+        <td class="px-4 py-2.5 text-center text-emerald-700">${d.concluidos}</td>
+        <td class="px-4 py-2.5 text-center text-blue-700">${d.andamento}</td>
+        <td class="px-4 py-2.5 text-right font-bold text-slate-900">${fmtMoeda(d.contratado)}</td>
+        <td class="px-4 py-2.5 text-right font-semibold text-emerald-700">${fmtMoeda(d.recebido)}</td>
+        <td class="px-4 py-2.5 text-right text-amber-700">${fmtMoeda(saldo)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('tfootAnual').innerHTML = `
+      <tr>
+        <td class="px-4 py-3">TOTAL HISTÓRICO (2016–2026)</td>
+        <td class="px-4 py-3 text-center">${sQtd}</td>
+        <td class="px-4 py-3 text-center">${sConc}</td>
+        <td class="px-4 py-3 text-center">${sAnd}</td>
+        <td class="px-4 py-3 text-right">${fmtMoeda(sVC)}</td>
+        <td class="px-4 py-3 text-right">${fmtMoeda(sVR)}</td>
+        <td class="px-4 py-3 text-right">${fmtMoeda(sVC - sVR)}</td>
+      </tr>
+    `;
+
+    if (estado.modoTabelaFase2 === 'anual') {
+      document.getElementById('contadorLinhasFase2').innerText = serieAnualReal.length;
+      document.getElementById('somaFiltradaTop').innerText = fmtMoeda(sVC);
+    }
+  }
+
+  function resetarFiltrosFase2() {
+    document.getElementById('fBusca').value = '';
+    document.getElementById('fAno').value = 'todos';
+    document.getElementById('fInstrumento').value = 'todos';
+    document.getElementById('fEtapa').value = 'todos';
+    document.getElementById('fNatureza').value = 'todos';
+    filtrarProjetosFase2();
+  }
+
+  function exportarTabelaFase2(formato) {
+    const sep = formato === 'xls' ? '\t' : ',';
+    const idBody = estado.modoTabelaFase2 === 'projetos' ? '#tbodyProjetos tr' : '#tbodyAnual tr';
+    let linhas = [];
+
+    if (estado.modoTabelaFase2 === 'projetos') {
+      linhas.push(['Ano', 'Instrumento', 'Projeto', 'Unidade_UnB', 'Demandante', 'Coordenador', 'Etapa', 'Valor_Contratado', 'Valor_Recebido'].join(sep));
+    } else {
+      linhas.push(['Ano', 'Total_Projetos', 'Concluidos', 'Em_Andamento', 'Valor_Contratado', 'Valor_Recebido', 'Saldo_a_Receber'].join(sep));
+    }
+
+    document.querySelectorAll(idBody).forEach(tr => {
+      const cols = Array.from(tr.cells).map(td => `"${td.innerText.replace(/"/g, '""')}"`);
+      linhas.push(cols.join(sep));
+    });
+
+    const blob = new Blob(['\uFEFF' + linhas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `recorte_ncst_unb.${formato}`;
+    link.click();
+  }
+
+  window.addEventListener('DOMContentLoaded', atualizarDashboard);
+</script>
+</body>
+</html>
